@@ -51,7 +51,9 @@ module aes_core(
 
                 input wire [127 : 0]  block,
                 output wire [127 : 0] result,
-                output wire           result_valid
+                output wire           result_valid,
+
+                output wire           busy
                );
 
 
@@ -174,6 +176,7 @@ module aes_core(
   assign ready        = ready_reg;
   assign result       = muxed_new_block;
   assign result_valid = result_valid_reg;
+  assign busy         = (aes_core_ctrl_new != CTRL_IDLE);
 
 
   //----------------------------------------------------------------
