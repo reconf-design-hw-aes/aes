@@ -69,13 +69,14 @@ module USER_HW (
     input   usr_board2host_prog_full,
     output  usr_board2host_wr_en
 );
+    wire usr_rst2 = ~usr_rst;
     assign usr_pio_ch0_rd_ack = 0;
     assign usr_pio_ch0_rd_data = 0;
     assign usr0_int_req = 0;
     assign usr1_int_req = 0;
-     reg usr_pio_ch0_wr_ack;
+    reg usr_pio_ch0_wr_ack;
 
-    parameter n_aes_core = 10;// number of aes core
+    parameter n_aes_core = 60;                          // number of aes core
 
     reg init;                                           // init key for aes core
     wire [0:n_aes_core - 1] aes_next;                   // per core start signal
@@ -84,7 +85,7 @@ module USER_HW (
 
     wire [255:0] key;                                   // key
 
-    wire [127:0] block;                                 // input block
+    wire [127:0] block = usr_host2board_dout[127:0];    // input block
     wire [127:0] aes_result [0:n_aes_core - 1];         // per core result
     wire [127:0] aes_clean_result [0:n_aes_core - 1];   // clean per core result
     wor [127:0] result;           // result
@@ -98,32 +99,33 @@ module USER_HW (
     wire [0:n_aes_core - 1] aes_busy;
 
     for (genvar i = 0; i < n_aes_core; i = i + 1) begin
-        aes_top(.clk(usr_clk),
-                .rst(usr_rst),
+        aes_top aes(.clk(usr_clk),
+                    .rst(usr_rst2),
 
-                .init(init), // init key
-                .next(aes_next[i]), // start encoding
-                .ready(aes_ready[i]), // key generate ready
+                    .init(init),                        // init key
+                    .next(aes_next[i]),                 // start encoding
+                    .ready(aes_ready[i]),               // key generate ready
 
-                .key(key),
-                .keylen(0), // FIXME: WTF???
+                    .key(key),
+                    .keylen(0),
 
-                .block(block),
-                .result(aes_result[i]),
-                .result_valid(aes_result_valid[i]),
+                    .block(block),
+                    .result(aes_result[i]),
+                    .result_valid(aes_result_valid[i]),
 
-                .busy(aes_busy[i])
-                );
+                    .busy(aes_busy[i])
+                    );
         assign aes_clean_result[i] = aes_result_valid[i] ? aes_result[i] : 0;
     end
 
+    reg key_busy = 0;
     reg [31:0] key_pci [0:3];
 
     assign key = {128'b0, key_pci[3], key_pci[2], key_pci[1], key_pci[0]};
 
-    always @(posedge usr_clk or negedge usr_rst)
+    always @(posedge usr_clk or negedge usr_rst2)
     begin // key_pci, key_busy, init
-        if(~usr_rst) begin
+        if(~usr_rst2) begin
             key_pci[0] <= 0;
             key_pci[1] <= 0;
             key_pci[2] <= 0;
@@ -137,8 +139,14 @@ module USER_HW (
                 end
                 if(usr_pio_ch0_wr_addr == 4) begin
                     init <= 1;
+                    key_busy <= 1;
                 end else begin
                     init <= 0;
+                    if(ready & (~init)) begin
+                        key_busy <= 0;
+                    end else begin
+                        key_busy <= key_busy;
+                    end
                 end
             end else begin
                 usr_pio_ch0_wr_ack <= 0;
@@ -147,24 +155,29 @@ module USER_HW (
                 key_pci[2] <= key_pci[2];
                 key_pci[3] <= key_pci[3];
                 init <= 0;
+                if(ready & (~init)) begin
+                    key_busy <= 0;
+                end else begin
+                    key_busy <= key_busy;
+                end
             end
         end
     end
 
-    wire next = 0;
+    wire next;
     integer current_aes = 0;
 
     for (genvar i = 0; i < n_aes_core; i = i + 1) begin // aes_next
         assign aes_next[i] = (current_aes == i) ? next : 0;
     end
 
-    always @(posedge usr_clk or negedge usr_rst)
+    always @(posedge usr_clk or negedge usr_rst2)
     begin // current_aes
-        if(~usr_rst) begin
+        if(~usr_rst2) begin
             current_aes <= 0;
         end else begin
             if(next == 1) begin
-                current_aes = current_aes + 1;
+                current_aes = (current_aes + 1) % n_aes_core;
             end
         end
     end
@@ -173,20 +186,20 @@ module USER_HW (
     wire fifo_empty;
     wire fifo_rd_en = (!usr_board2host_prog_full) && (!fifo_empty);
 
-    aes_result_fifo(.clk(usr_clk),
-                    .rst(usr_rst),
-                    .din(result),
-                    .wr_en(result_valid),
-                    .rd_en(fifo_rd_en),
-                    .dout(usr_board2host_din),
-                    .full(),
-                    .empty(fifo_empty),
-                    .prog_full(fifo_full)
-                    );
+    aes_result_fifo fifo(.clk(usr_clk),
+                         .rst(usr_rst),
+                         .din(result),
+                         .wr_en(result_valid),
+                         .rd_en(fifo_rd_en),
+                         .dout(usr_board2host_din),
+                         .full(),
+                         .empty(fifo_empty),
+                         .prog_full(fifo_full)
+                         );
 
     assign usr_board2host_wr_en = fifo_rd_en;
 
-    assign next = (!usr_host2board_empty) && ready && (!fifo_full);
+    assign next = (~usr_host2board_empty) & (~key_busy) & (~fifo_full) & (~init);
 
     assign usr_host2board_rd_en = next;
 

@@ -68,7 +68,7 @@ module aes_top(
 
   aes_core aes_core(
      .clk(clk),
-     .reset_n(reset_n),
+     .reset_n(rst),
 
      .encdec(ENC),
      .init(init),

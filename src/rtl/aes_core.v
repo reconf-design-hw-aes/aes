@@ -303,6 +303,16 @@ module aes_core(
                 aes_core_ctrl_new = CTRL_NEXT;
                 aes_core_ctrl_we  = 1;
               end
+            else
+              begin
+                init_state = 0;
+                ready_new = 0;
+                ready_we = 1;
+                result_valid_new = 0;
+                result_valid_we = 1;
+                aes_core_ctrl_new = CTRL_IDLE;
+                aes_core_ctrl_we = 1;
+              end
           end
 
         CTRL_INIT:
