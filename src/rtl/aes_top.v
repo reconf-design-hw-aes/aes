@@ -56,6 +56,16 @@ module aes_top(
 
   parameter ENC = 1'b1;
 
+  reg [127:0] block_reg = 0;
+
+  always@(clk)
+  begin
+    if (next)
+    begin
+      block_reg <= block;
+    end
+  end
+
   aes_core aes_core(
      .clk(clk),
      .reset_n(reset_n),
@@ -68,7 +78,7 @@ module aes_top(
      .key(key),
      .keylen(keylen),
 
-     .block(block),
+     .block(block_reg),
      .result(result),
      .result_valid(result_valid),
 
