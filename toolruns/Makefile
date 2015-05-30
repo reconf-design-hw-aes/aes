@@ -42,7 +42,7 @@ KEYMEM_SRC=../src/rtl/aes_key_mem.v
 ENCIPHER_SRC=../src/rtl/aes_encipher_block.v
 DECIPHER_SRC=../src/rtl/aes_decipher_block.v
 CORE_SRC=../src/rtl/aes_core.v $(KEYMEM_SRC) $(SBOX_SRC) $(INV_SBOX_SRC) $(ENCIPHER_SRC) $(DECIPHER_SRC)
-TOP_SRC=../src/rtl/top.v $(CORE_SRC)
+TOP_SRC=../src/rtl/aes_top.v $(CORE_SRC)
 
 #TB_TOP_SRC =../src/tb/tb_aes.v
 TB_CORE_SRC =../src/tb/tb_aes_core.v
