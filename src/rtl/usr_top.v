@@ -36,47 +36,157 @@
 //
 //======================================================================
 
-module USER_HW(
-
-  input usr_clk,
-  /*user reset, in usr_clk clock domain*/
-  input usr_rst,
-  /*user PIO interface, in user clock domain*/
-  input  [14:0] usr_pio_ch0_wr_addr,
-  input  [31:0] usr_pio_ch0_wr_data,
-  input  usr_pio_ch0_wr_req,
-  output usr_pio_ch0_wr_ack,
-  input  [14:0] usr_pio_ch0_rd_addr,
-  output [31:0] usr_pio_ch0_rd_data,
-  input  usr_pio_ch0_rd_req,
-  output usr_pio_ch0_rd_ack,
-  /*user interrupt interface, in user "user_int_clk" clock domain*/
-  // user interrupt 0 (vector = 0)
-
-  output usr0_int_req,
-
-  input  usr0_int_clr,
-
-  input  usr0_int_enable,
-
-  // user interrupt 1 (vector = 1)
-
-  output usr1_int_req,
-
-  input  usr1_int_clr,
-
-  input  usr1_int_enable,
-  /*user DMA interface, in user clock domain, clock is from user's usr_host2board_clk and usr_board2host_clk*/
-  //output  usr_host2board_clk,
-  input   [129:0] usr_host2board_dout,
-  input   usr_host2board_empty,
-  input   usr_host2board_almost_empty,
-  output  usr_host2board_rd_en,
-  //output  usr_board2host_clk,
-  output  [129:0] usr_board2host_din,
-  input   usr_board2host_prog_full,
-  output  usr_board2host_wr_en
+module USER_HW (
+    input usr_clk,
+    /*user reset, in usr_clk clock domain*/
+    input usr_rst,
+    /*user PIO interface, in user clock domain*/
+    input  [14:0] usr_pio_ch0_wr_addr,
+    input  [31:0] usr_pio_ch0_wr_data,
+    input  usr_pio_ch0_wr_req,
+    output usr_pio_ch0_wr_ack,
+    input  [14:0] usr_pio_ch0_rd_addr,
+    output [31:0] usr_pio_ch0_rd_data,
+    input  usr_pio_ch0_rd_req,
+    output usr_pio_ch0_rd_ack,
+    /*user interrupt interface, in user "user_int_clk" clock domain*/
+    // user interrupt 0 (vector = 0)
+    output usr0_int_req,
+    input  usr0_int_clr,
+    input  usr0_int_enable,
+    // user interrupt 1 (vector = 1)
+    output usr1_int_req,
+    input  usr1_int_clr,
+    input  usr1_int_enable,
+    /*user DMA interface, in user clock domain, clock is from user's usr_host2board_clk and usr_board2host_clk*/
+    //output  usr_host2board_clk,
+    input   [129:0] usr_host2board_dout,
+    input   usr_host2board_empty,
+    input   usr_host2board_almost_empty,
+    output  usr_host2board_rd_en,
+    //output  usr_board2host_clk,
+    output  [129:0] usr_board2host_din,
+    input   usr_board2host_prog_full,
+    output  usr_board2host_wr_en
 );
+    assign usr_pio_ch0_rd_ack = 0;
+    assign usr_pio_ch0_rd_data = 0;
+    assign usr0_int_req = 0;
+    assign usr1_int_req = 0;
+
+    parameter n_aes_core = 10;// number of aes core
+
+    reg init;                                           // init key for aes core
+    wire [0:n_aes_core - 1] aes_next;                   // per core start signal
+    wire [0:n_aes_core - 1] aes_ready;                  // per core ready signal
+    wire ready = & aes_ready;                           // ready signal
+
+    wire [255:0] key;                                   // key
+
+    wire [127:0] block;                                 // input block
+    wire [127:0] aes_result [0:n_aes_core - 1];         // per core result
+    wire [127:0] aes_clean_result [0:n_aes_core - 1];   // clean per core result
+    wire [127:0] result = | aes_clean_result;           // result
+    wire [0:n_aes_core - 1] aes_result_valid;           // per core result valid
+    wire result_valid = | aes_result_valid;
+
+    wire [0:n_aes_core - 1] aes_busy;
+
+    for (i = 0; i < n_aes_core; i++) begin
+        aes_top(.clk(usr_clk),
+                .rst(usr_rst),
+
+                .init(init), // init key
+                .next(aes_next[i]), // start encoding
+                .ready(aes_ready[i]), // key generate ready
+
+                .key(key),
+                .keylen(0), // FIXME: WTF???
+
+                .block(block),
+                .result(aes_result[i]),
+                .result_valid(aes_result_valid[i]),
+
+                .busy(aes_busy[i])
+                );
+        assign aes_clean_result = aes_result_valid[i] ? aes_result[i] : 0;
+    end
+
+    reg key_busy = 0;
+    reg [31:0] key_pci [0:3];
+
+    for (i = 0; i < 4; i = i + 1) begin : key
+        assign key[i*32+31:i*32] = key_pci[i];
+    end
+
+    always @(posedge usr_clk or negedge usr_rst)
+    begin : key_pci__key_busy__init
+        if(~usr_rst) begin
+            key_busy <= 0;
+            for (i = 0; i < 4; i++) begin
+                key_pci[i] <= 0;
+            end
+        end else begin
+            if(usr_pio_ch0_wr_req == 1) begin
+                usr_pio_ch0_wr_ack <= 1;
+                if(usr_pio_ch0_wr_addr < 4) begin
+                    key_pci[usr_pio_ch0_wr_addr] <= usr_pio_ch0_wr_data;
+                end
+                if(usr_pio_ch0_wr_addr == 4) begin
+                    key_busy <= 1;
+                    init <= 1;
+                end else begin
+                    init <= 0;
+                    if(ready) begin
+                        key_busy <= 0;
+                    end else begin
+                        key_busy <= key_busy;
+                    end
+                end
+            end else begin
+                usr_pio_ch0_wr_ack <= 0;
+            end
+        end
+    end
+
+    wire next = 0;
+    integer current_aes = 0;
+
+    for (i = 0; i < count; i = i + 1) begin : aes_next
+        assign aes_next[i] = (current_aes == i) ? next : 0;
+    end
+
+    always @(posedge usr_clk or negedge usr_rst)
+    begin : current_aes
+        if(~usr_rst) begin
+            current_aes <= 0;
+        end else begin
+            if(next == 1) begin
+                current_aes = current_aes + 1;
+            end
+        end
+    end
+
+    wire fifo_full;
+    wire fifo_empty;
+    wire fifo_rd_en = (!usr_board2host_prog_full) && fifo_empty;
+
+    aes_result_fifo(.clk(usr_clk),
+                    .rst(usr_rst),
+                    .din(result),
+                    .wr_en(result_valid),
+                    .rd_en(fifo_rd_en),
+                    .dout(usr_board2host_din),
+                    .full(),
+                    .empty(fifo_empty),
+                    .prog_full(fifo_full)
+                    )
+
+    assign usr_board2host_wr_en = fifo_rd_en;
+
+    assign next = (!usr_host2board_empty) && ready && (!fifo_full);
+
+    assign usr_host2board_rd_en = next;
 
 endmodule // USER_HW
 
