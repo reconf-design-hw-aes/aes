@@ -199,7 +199,7 @@ module USER_HW (
 
     assign usr_board2host_wr_en = fifo_rd_en;
 
-    assign next = (~usr_host2board_empty) & (~key_busy) & (~fifo_full) & (~init) & (ready[current_aes]);
+    assign next = (~usr_host2board_empty) & (~key_busy) & (~fifo_full) & (~init) & (aes_ready[current_aes]);
 
     assign usr_host2board_rd_en = next;
 

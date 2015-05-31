@@ -306,7 +306,7 @@ module aes_core(
             else
               begin
                 init_state = 0;
-                ready_new = 0;
+                ready_new = 1;
                 ready_we = 1;
                 result_valid_new = 0;
                 result_valid_we = 1;
