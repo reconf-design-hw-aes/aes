@@ -54,8 +54,6 @@ module aes_top(
    output wire busy
     );
 
-  parameter ENC = 1'b1;
-
   reg [127:0] block_reg = 0;
 
   always@(clk)
@@ -70,7 +68,6 @@ module aes_top(
      .clk(clk),
      .reset_n(rst),
 
-     .encdec(ENC),
      .init(init),
      .next(next),
      .ready(ready),

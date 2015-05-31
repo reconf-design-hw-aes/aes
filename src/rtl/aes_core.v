@@ -37,11 +37,12 @@
 //
 //======================================================================
 
+`default_nettype none
+
 module aes_core(
                 input wire            clk,
                 input wire            reset_n,
 
-                input wire            encdec,
                 input wire            init,
                 input wire            next,
                 output wire           ready,
@@ -89,23 +90,13 @@ module aes_core(
   reg            init_state;
 
   wire [127 : 0] round_key;
+
+  wire [3 : 0]   enc_round_nr;
+
+  wire           enc_ready;
   wire           key_ready;
 
-  reg            enc_next;
-  wire [3 : 0]   enc_round_nr;
-  wire [127 : 0] enc_new_block;
-  wire           enc_ready;
   wire [31 : 0]  enc_sboxw;
-
-  reg            dec_next;
-  wire [3 : 0]   dec_round_nr;
-  wire [127 : 0] dec_new_block;
-  wire           dec_ready;
-
-  reg [127 : 0]  muxed_new_block;
-  reg [3 : 0]    muxed_round_nr;
-  reg            muxed_ready;
-
   wire [31 : 0]  keymem_sboxw;
 
   reg [31 : 0]   muxed_sboxw;
@@ -119,7 +110,7 @@ module aes_core(
                                .clk(clk),
                                .reset_n(reset_n),
 
-                               .next(enc_next),
+                               .next(next),
 
                                .keylen(keylen),
                                .round(enc_round_nr),
@@ -129,24 +120,8 @@ module aes_core(
                                .new_sboxw(new_sboxw),
 
                                .block(block),
-                               .new_block(enc_new_block),
+                               .new_block(result),
                                .ready(enc_ready)
-                              );
-
-
-  aes_decipher_block dec_block(
-                               .clk(clk),
-                               .reset_n(reset_n),
-
-                               .next(dec_next),
-
-                               .keylen(keylen),
-                               .round(dec_round_nr),
-                               .round_key(round_key),
-
-                               .block(block),
-                               .new_block(dec_new_block),
-                               .ready(dec_ready)
                               );
 
 
@@ -158,7 +133,7 @@ module aes_core(
                      .keylen(keylen),
                      .init(init),
 
-                     .round(muxed_round_nr),
+                     .round(enc_round_nr),
                      .round_key(round_key),
                      .ready(key_ready),
 
@@ -174,7 +149,6 @@ module aes_core(
   // Concurrent connectivity for ports etc.
   //----------------------------------------------------------------
   assign ready        = ready_reg;
-  assign result       = muxed_new_block;
   assign result_valid = result_valid_reg;
   assign busy         = (aes_core_ctrl_new != CTRL_IDLE);
 
@@ -231,37 +205,6 @@ module aes_core(
           muxed_sboxw = enc_sboxw;
         end
     end // sbox_mux
-
-
-  //----------------------------------------------------------------
-  // encdex_mux
-  //
-  // Controls which of the datapaths that get the next signal, have
-  // access to the memory as well as the block processing result.
-  //----------------------------------------------------------------
-  always @*
-    begin : encdec_mux
-      enc_next = 0;
-      dec_next = 0;
-
-      if (encdec)
-        begin
-          // Encipher operations
-          enc_next        = next;
-          muxed_round_nr  = enc_round_nr;
-          muxed_new_block = enc_new_block;
-          muxed_ready     = enc_ready;
-        end
-      else
-        begin
-          // Decipher operations
-          dec_next        = next;
-          muxed_round_nr  = dec_round_nr;
-          muxed_new_block = dec_new_block;
-          muxed_ready     = dec_ready;
-        end
-    end // encdec_mux
-
 
   //----------------------------------------------------------------
   // aes_core_ctrl
@@ -332,7 +275,7 @@ module aes_core(
           begin
             init_state = 0;
 
-            if (muxed_ready)
+            if (enc_ready)
               begin
                 ready_new         = 1;
                 ready_we          = 1;
