@@ -76,7 +76,7 @@ module USER_HW (
     assign usr1_int_req = 0;
     reg usr_pio_ch0_wr_ack;
 
-    parameter n_aes_core = 60;                          // number of aes core
+    parameter n_aes_core = 10;                          // number of aes core
 
     reg init;                                           // init key for aes core
     wire [0:n_aes_core - 1] aes_next;                   // per core start signal
@@ -199,7 +199,7 @@ module USER_HW (
 
     assign usr_board2host_wr_en = fifo_rd_en;
 
-    assign next = (~usr_host2board_empty) & (~key_busy) & (~fifo_full) & (~init);
+    assign next = (~usr_host2board_empty) & (~key_busy) & (~fifo_full) & (~init) & (ready[current_aes]);
 
     assign usr_host2board_rd_en = next;
 
