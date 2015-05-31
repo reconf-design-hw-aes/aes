@@ -177,7 +177,7 @@ module USER_HW (
             current_aes <= 0;
         end else begin
             if(next == 1) begin
-                current_aes = (current_aes + 1) % n_aes_core;
+                current_aes <= (current_aes + 1) % n_aes_core;
             end
         end
     end
