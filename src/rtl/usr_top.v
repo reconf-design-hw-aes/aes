@@ -76,7 +76,7 @@ module USER_HW (
     assign usr1_int_req = 0;
     reg usr_pio_ch0_wr_ack;
 
-    parameter n_aes_core = 10;                          // number of aes core
+    parameter n_aes_core = 8;                          // number of aes core
 
     reg init;                                           // init key for aes core
     wire [0:n_aes_core - 1] aes_next;                   // per core start signal
@@ -177,7 +177,7 @@ module USER_HW (
             current_aes <= 0;
         end else begin
             if(next == 1) begin
-                current_aes <= (current_aes + 1) % n_aes_core;
+                current_aes <= (current_aes + 1) & (n_aes_core - 1);
             end
         end
     end
