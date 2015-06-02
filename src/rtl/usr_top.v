@@ -121,7 +121,7 @@ module USER_HW (
     reg key_busy = 0;
     reg [31:0] key_pci [0:3];
 
-    assign key = {128'b0, key_pci[3], key_pci[2], key_pci[1], key_pci[0]};
+    assign key = {key_pci[3], key_pci[2], key_pci[1], key_pci[0], 128'b0};
 
     always @(posedge usr_clk or negedge usr_rst2)
     begin // key_pci, key_busy, init
@@ -185,17 +185,20 @@ module USER_HW (
     wire fifo_full;
     wire fifo_empty;
     wire fifo_rd_en = (!usr_board2host_prog_full) && (!fifo_empty);
+	 wire [127:0] fifo_dout;
 
     aes_result_fifo fifo(.clk(usr_clk),
                          .rst(usr_rst),
                          .din(result),
                          .wr_en(result_valid),
                          .rd_en(fifo_rd_en),
-                         .dout(usr_board2host_din),
+                         .dout(fifo_dout),
                          .full(),
                          .empty(fifo_empty),
                          .prog_full(fifo_full)
                          );
+
+    assign usr_board2host_din = {2'b11, fifo_dout};
 
     assign usr_board2host_wr_en = fifo_rd_en;
 
