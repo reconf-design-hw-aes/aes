@@ -1,6 +1,6 @@
 module my_aes_encipher(
     input clk,
-    input rst,  // posedge or negedge?
+    input rst,  // negedge
 
     input next,
 
@@ -22,18 +22,33 @@ parameter STATE_ENC = 2'b1;
 reg [127 : 0] key_mem [0 : 10];
 
 reg [1:0] state = 0;
-reg [1:0] nextstate = 0;
+wire [1:0] nextstate = (state == STATE_IDLE) ?
+                      next ?
+                        STATE_ENC :
+                        STATE_IDLE :
+                      (round_reg < AES128_ROUNDS) ?
+                        STATE_ENC :
+                        STATE_IDLE;
+								
+
 reg [3:0] round_reg = 0;
+wire [3 : 0] next_round = (state == STATE_IDLE) ?
+                      4'h0 :
+                      (round_reg < AES128_ROUNDS) ?
+                        round_reg + 1 :
+                        4'h0;
+
 wire [127:0] roundkey;
 
-assign roundkey = keymem[round_reg];
+assign roundkey = key_mem[round_reg];
 
 reg [127:0] block_reg;
 
 assign encblock = block_reg;
 assign sboxw = block_reg;
+wire [127:0] news_boxw;
 
-assign is_idle = (nextstate == `STATE_IDLE);
+assign is_idle = (nextstate == STATE_IDLE);
 
 reg result_valid_reg;
 wire next_result_valid;
@@ -113,32 +128,32 @@ function [127 : 0] addroundkey(input [127 : 0] data, input [127 : 0] rkey);
   end
   endfunction // addroundkey
 
-always@(posedge clk)
-{
+always@(posedge clk or negedge rst)
+begin
   if (~rst)
-  {
-    state <= `STATE_IDLE;
+  begin
+    state <= STATE_IDLE;
     round_reg <= 0;
     result_valid_reg <= 0;
-  }
+  end
   else
-  {
+  begin
     state <= nextstate;
     round_reg <= next_round;
     result_valid_reg <= next_result_valid;
-  }
-}
+  end
+end
 
 always@(posedge clk)
-{
+begin
   case(state)
-    `STATE_IDLE:
+    STATE_IDLE:
       if (next)
-      {
+      begin
         block_reg <= block;
-      }
+      end
 
-    `STATE_ENC:
+    STATE_ENC:
       if (round_reg == 4'h0)
         block_reg <= addkey_init_block;
       else if (round_reg == AES128_ROUNDS)
@@ -146,7 +161,7 @@ always@(posedge clk)
       else
         block_reg <= addkey_main_block;
   endcase
-}
+end
 
 wire shiftrows_block;
 wire mixcolumns_block;
@@ -154,65 +169,36 @@ wire addkey_init_block;
 wire addkey_main_block;
 wire addkey_final_block;
 
-assign shiftrows_block = shiftrows(newsboxw);
+assign shiftrows_block = shiftrows(new_sboxw);
 assign mixcolumns_block = mixcolumns(shiftrows_block);
-assign addkey_init_block = addroundkey(newsboxw, roundkey);
+assign addkey_init_block = addroundkey(new_sboxw, roundkey);
 assign addkey_main_block = addroundkey(mixcolumns_block, roundkey);
 assign addkey_final_block = addroundkey(shiftrows_block, roundkey);
 
 always@(posedge clk)
-{
+begin
   if (init_roundkey_valid)
-  {
-    for (genvar i = 1 ; i <= AES128_ROUNDS ; i = i + 1)
-    {
+  begin
+    for (genvar i = 0 ; i < AES128_ROUNDS + 1 ; i = i + 1) begin
       if (i == init_round)
-      {
-        keymem[i] <= init_roundkey;
-      }
+      begin
+        key_mem[i] <= init_roundkey;
+      end
       else
-      {
-        keymem[i]<= keymem[i];
-      }
-    }
-  }
+      begin
+        key_mem[i]<= key_mem[i];
+      end
+    end
+  end
   else
-  {
-    for (genvar i = 1 ; i <= AES128_ROUND ; i = i + 1)
-    {
-      keymem[i] <= keymem[i];
-    }
-  }
-}
+  begin
+    for (genvar i = 0 ; i < AES128_ROUNDS + 1 ; i = i + 1) begin
+      key_mem[i] <= key_mem[i];
+    end
+  end
+end
 
-assign nextstate = (state == `STATE_IDLE) ?
-                      next ?
-                        `STATE_ENC :
-                        `STATE_IDLE :
-                      (round_reg < AES128_ROUNDS) ?
-                        `STATE_ENC :
-                        `STATE_IDLE;
 
-always@(*)
-{
-  case(state)
-    `STATE_IDLE:
-      next_round = 0;
-    `STATE_ENC:
-      if (round_reg < AES128_ROUNDS)
-      {
-        next_round = round_reg + 1;
-      } else
-      {
-        next_round = 0;
-      }
-  endcase
-}
-
-assign next_round = (state == `STATE_IDLE) ?
-                      4'h0 :
-                      (round_reg < AES128_ROUNDS) ?
-                        round_reg + 1 :
-                        4'h0;
+aes_sbox sbox(.sboxw(sboxw), .new_sboxw(new_sboxw));
 
 endmodule

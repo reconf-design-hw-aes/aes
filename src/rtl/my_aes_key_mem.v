@@ -9,64 +9,61 @@ module my_aes_key_mem(
   output [127 : 0]  roundkey,
   output            roundkey_valid,
   
-  output            ready,
+  output            ready
     );
 
 parameter AES_128_NUM_ROUNDS = 4'ha;
+parameter STATE_IDLE = 2'b0;
+parameter STATE_GENERATE = 2'b1;
 
 reg [127 : 0] key_mem_new;
 
 assign round = round_reg;
 assign roundkey = key_mem_new;
-assign roundkey_valid = (round_reg != 0);
+assign roundkey_valid = (state == STATE_GENERATE);
 
 reg [127 : 0] prev_key_reg;
 reg [127 : 0] prev_key_new;
 
 reg [3 : 0] round_reg = 0;
-wire [3 : 0] nextround = 0;
-
-reg [1 : 0] state = 0;
-wire [1 : 0] nextstate = 0;
-
-aes_sbox sbox(.sboxw(sboxw), .new_sboxw(new_sboxw));
-
-assign ready = (state == `STATE_IDLE);
-
-nextround = (state == `STATE_IDLE) ?
+wire [3 : 0] nextround = (state == STATE_IDLE) ?
                 4'h0 : 
               (round_reg < AES_128_NUM_ROUNDS) ?
                 round_reg + 4'h1 :
                 4'h0 ;
 
-
-nextstate = (state == `STATE_IDLE) ?
+reg [1 : 0] state = 0;
+wire [1 : 0] nextstate = (state == STATE_IDLE) ?
               init ?
-                `STATE_GENERATE :
-                `STATE_IDLE :
+                STATE_GENERATE :
+                STATE_IDLE :
               (round_reg < AES_128_NUM_ROUNDS) ?
                 state :
-                `STATE_IDLE ;
+                STATE_IDLE ;
 
-always @ (posedge clk, negedge reset_n)
-{
+aes_sbox sbox(.sboxw(sboxw), .new_sboxw(new_sboxw));
+
+assign ready = (state == STATE_IDLE);
+
+always @ (posedge clk or negedge reset_n)
+begin
   if (!reset_n)
-  {
+  begin
     prev_key_reg     <= 128'h00000000000000000000000000000000;
     state            <= 2'b0;
     rcon_reg         <= 8'h00; 
     round_reg        <= 4'h0;
-  }
+  end
   else
-  {
+  begin
     state <= nextstate;
     round_reg <= nextround;
     rcon_reg <= rcon_new;
     prev_key_reg <= prev_key_new;
-  }
-}
+  end
+end
 
-wire round_key_update = (state == `STATE_GENERATE);
+wire round_key_update = (state == STATE_GENERATE);
 
 wire [7 : 0] tmp_rcon;
 assign rcon_new = (round_key_update)?
