@@ -96,24 +96,25 @@ module USER_HW (
         assign result = aes_clean_result[i];
     end
 
-    wire [0:n_aes_core - 1] aes_busy;
+    wire [3:0] round;
+    wire [127:0] roundkey;
+    wire         roundkey_valid;
 
     for (genvar i = 0; i < n_aes_core; i = i + 1) begin
-        aes_top aes(.clk(usr_clk),
+        my_aes_encipher aes(
+                    .clk(usr_clk),
                     .rst(usr_rst2),
 
-                    .init(init),                        // init key
                     .next(aes_next[i]),                 // start encoding
-                    .ready(aes_ready[i]),               // key generate ready
-
-                    .key(key),
-                    .keylen(0),
+                    .init_round(round),
+                    .init_roundkey(roundkey),
+                    .init_roundkey_valid(roundkey_valid),
 
                     .block(block),
-                    .result(aes_result[i]),
+                    .enblock(aes_result[i]),
                     .result_valid(aes_result_valid[i]),
 
-                    .busy(aes_busy[i])
+                    .is_idle(aes_ready[i])
                     );
         assign aes_clean_result[i] = aes_result_valid[i] ? aes_result[i] : 0;
     end
@@ -202,6 +203,20 @@ module USER_HW (
     assign next = (~usr_host2board_empty) & (~key_busy) & (~fifo_full) & (~init) & (aes_ready[current_aes]);
 
     assign usr_host2board_rd_en = next;
+
+  my_aes_key_mem keymem(
+                     .clk(clk),
+                     .reset_n(reset_n),
+
+                     .key(key),
+                     .init(init),
+
+                     .round(round),
+                     .roundkey(roundkey),
+                     .roundkey_valid(roundkey_valid),
+
+                     .ready(key_ready),
+                    );
 
 endmodule // USER_HW
 
