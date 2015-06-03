@@ -56,12 +56,16 @@ module aes_top(
 
   reg [127:0] block_reg = 0;
 
-  always@(clk)
+  always@(posedge clk)
   begin
     if (next)
     begin
       block_reg <= block;
     end
+	 else
+	 begin
+		block_reg <= block_reg;
+	 end
   end
 
   aes_core aes_core(
