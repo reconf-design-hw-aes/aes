@@ -38,8 +38,8 @@
 //======================================================================
 
 module aes_sbox(
-                input wire [31 : 0]  sboxw,
-                output wire [31 : 0] new_sboxw
+                input wire [127 : 0]  sboxw,
+                output wire [127 : 0] new_sboxw
                );
 
 
@@ -310,6 +310,18 @@ module aes_sbox(
   assign sbox[8'hff] = 8'h16;
 
 
+  assign new_sboxw[127 : 120] = sbox[sboxw[127 : 120]];
+  assign new_sboxw[119 : 112] = sbox[sboxw[119 : 112]];
+  assign new_sboxw[111 : 104] = sbox[sboxw[111 : 104]];
+  assign new_sboxw[103 : 96] = sbox[sboxw[103 : 96]];
+  assign new_sboxw[95 : 88] = sbox[sboxw[95 : 88]];
+  assign new_sboxw[87 : 80] = sbox[sboxw[87 : 80]];
+  assign new_sboxw[79 : 72] = sbox[sboxw[79 : 72]];
+  assign new_sboxw[71 : 64] = sbox[sboxw[71 : 64]];
+  assign new_sboxw[63 : 56] = sbox[sboxw[63 : 56]];
+  assign new_sboxw[55 : 48] = sbox[sboxw[55 : 48]];
+  assign new_sboxw[47 : 40] = sbox[sboxw[47 : 40]];
+  assign new_sboxw[39 : 32] = sbox[sboxw[39 : 32]];
   assign new_sboxw[31 : 24] = sbox[sboxw[31 : 24]];
   assign new_sboxw[23 : 16] = sbox[sboxw[23 : 16]];
   assign new_sboxw[15 : 08] = sbox[sboxw[15 : 08]];

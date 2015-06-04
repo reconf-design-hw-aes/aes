@@ -76,14 +76,16 @@ module USER_HW (
     assign usr1_int_req = 0;
     reg usr_pio_ch0_wr_ack;
 
-    parameter n_aes_core = 8;                          // number of aes core
+    parameter n_aes_core = 16;                           // number of aes core
+
+    wire key_ready [15:0];
 
     reg init;                                           // init key for aes core
     wire [0:n_aes_core - 1] aes_next;                   // per core start signal
     wire [0:n_aes_core - 1] aes_ready;                  // per core ready signal
     wire ready = & aes_ready;                           // ready signal
 
-    wire [255:0] key;                                   // key
+    wire [127:0] key;                                   // key
 
     wire [127:0] block = usr_host2board_dout[127:0];    // input block
     wire [127:0] aes_result [0:n_aes_core - 1];         // per core result
@@ -96,9 +98,9 @@ module USER_HW (
         assign result = aes_clean_result[i];
     end
 
-    wire [3:0] round;
-    wire [127:0] roundkey;
-    wire         roundkey_valid;
+    wire [3:0] round [15:0];
+    wire [127:0] roundkey [15:0];
+    wire         roundkey_valid [15:0];
 
     for (genvar i = 0; i < n_aes_core; i = i + 1) begin
         my_aes_encipher aes(
@@ -106,12 +108,12 @@ module USER_HW (
                     .rst(usr_rst2),
 
                     .next(aes_next[i]),                 // start encoding
-                    .init_round(round),
-                    .init_roundkey(roundkey),
-                    .init_roundkey_valid(roundkey_valid),
+                    .init_round(round[i]),
+                    .init_roundkey(roundkey[i]),
+                    .init_roundkey_valid(roundkey_valid[i]),
 
                     .block(block),
-                    .enblock(aes_result[i]),
+                    .encblock(aes_result[i]),
                     .result_valid(aes_result_valid[i]),
 
                     .is_idle(aes_ready[i])
@@ -119,13 +121,12 @@ module USER_HW (
         assign aes_clean_result[i] = aes_result_valid[i] ? aes_result[i] : 0;
     end
 
-    reg key_busy = 0;
     reg [31:0] key_pci [0:3];
 
-    assign key = {key_pci[3], key_pci[2], key_pci[1], key_pci[0], 128'b0};
+    assign key = {key_pci[3], key_pci[2], key_pci[1], key_pci[0]};
 
     always @(posedge usr_clk or negedge usr_rst2)
-    begin // key_pci, key_busy, init
+    begin // key_pci, init
         if(~usr_rst2) begin
             key_pci[0] <= 0;
             key_pci[1] <= 0;
@@ -140,14 +141,8 @@ module USER_HW (
                 end
                 if(usr_pio_ch0_wr_addr == 4) begin
                     init <= 1;
-                    key_busy <= 1;
                 end else begin
                     init <= 0;
-                    if(ready & (~init)) begin
-                        key_busy <= 0;
-                    end else begin
-                        key_busy <= key_busy;
-                    end
                 end
             end else begin
                 usr_pio_ch0_wr_ack <= 0;
@@ -156,11 +151,6 @@ module USER_HW (
                 key_pci[2] <= key_pci[2];
                 key_pci[3] <= key_pci[3];
                 init <= 0;
-                if(ready & (~init)) begin
-                    key_busy <= 0;
-                end else begin
-                    key_busy <= key_busy;
-                end
             end
         end
     end
@@ -203,23 +193,27 @@ module USER_HW (
 
     assign usr_board2host_wr_en = fifo_rd_en;
 
-    assign next = (~usr_host2board_empty) & (~key_busy) & (~fifo_full) & (~init) & (aes_ready[current_aes]);
+    assign next = (~usr_host2board_empty) & (key_ready[0]) & (~fifo_full) & (~init);
 
     assign usr_host2board_rd_en = next;
 
-  my_aes_key_mem keymem(
-                     .clk(clk),
-                     .reset_n(reset_n),
+	 for (genvar i = 0 ; i < n_aes_core ; i = i + 1) begin
+		 my_aes_key_mem keymem(
+									  .clk(usr_clk),
+									  .reset_n(usr_rst2),
 
-                     .key(key),
-                     .init(init),
+									  .key(key),
+									  .init(init),
 
-                     .round(round),
-                     .roundkey(roundkey),
-                     .roundkey_valid(roundkey_valid),
+									  .round(round[i]),
+									  .roundkey(roundkey[i]),
+									  .roundkey_valid(roundkey_valid[i]),
 
-                     .ready(key_ready),
-                    );
+									  .ready(key_ready[i])
+									  );
+	 end
+
+
 
 endmodule // USER_HW
 
