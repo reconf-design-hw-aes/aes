@@ -46,9 +46,11 @@ wire [3 : 0] next_round = (state == STATE_IDLE) ?
                                                 round_reg + 1 :
                                                 4'h0;
 
-wire [127:0] roundkey;
-
-assign roundkey = key_mem[round_reg];
+reg [127:0] roundkey;
+wire [127:0] nextroundkey;
+assign nextroundkey = (state == STATE_IDLE) ?
+							key_mem[0]:
+							key_mem[round_reg+1];
 
 reg [127:0] block_reg;
 
@@ -179,6 +181,17 @@ begin
                 else
                     block_reg <= addkey_main_block;
         endcase
+    end
+end
+
+always@(posedge clk or negedge rst)
+begin
+    if (~rst)
+    begin
+        roundkey <= 128'b0;
+    end
+    else begin
+        roundkey <= nextroundkey;
     end
 end
 
