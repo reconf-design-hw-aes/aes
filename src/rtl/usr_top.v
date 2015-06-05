@@ -189,11 +189,20 @@ module USER_HW (
                          .prog_full(fifo_full)
                          );
 
+    reg fifo_full_reg;
+    always @(posedge usr_clk or negedge usr_rst2) begin
+        if (~usr_rst2) begin
+            fifo_full_reg <= 1;
+        end else begin
+            fifo_full_reg <= fifo_full;
+        end
+    end
+
     assign usr_board2host_din = {2'b11, fifo_dout};
 
     assign usr_board2host_wr_en = fifo_rd_en;
 
-    assign next = (~usr_host2board_empty) & (key_ready[0]) & (~fifo_full) & (~init);
+    assign next = (~usr_host2board_empty) & (key_ready[0]) & (~fifo_full_reg) & (~init);
 
     assign usr_host2board_rd_en = next;
 
